@@ -1,8 +1,9 @@
-// Ficha V20 (regras da mesa, 1999) + carteirinha. Monta o formulário e envia ao servidor.
+// Ficha V20 (regras da mesa, 1999) + carteirinha. 100% no navegador: sem servidor.
 const $ = s => document.querySelector(s);
 const slug = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const NOMES = ['Primário', 'Secundário', 'Terciário'];
 const PTS = { atr: [6, 4, 3], hab: [11, 7, 4] };
+const KEY = 'yasogami-ficha-v1';
 
 // ---------- Helpers de HTML ----------
 const dots = (name, max = 5, min = 0, cap = max, lock = 0) => `<span class="dots" data-name="${name}" data-max="${max}" data-min="${min}" data-cap="${cap}" data-lock="${lock}"></span>`;
@@ -113,9 +114,9 @@ $('#p2').innerHTML = `
       <label class="campo">Nascimento: <input type="date" name="nascimento"></label>
     </div>
   </div>
-  <div class="gr"><span class="bar"></span><span>Nº <input readonly name="matricula_no" class="mat"></span><span>VÁLIDO ATÉ 03/2000</span></div>
+  <div class="gr"><span class="bar">${Array.from({ length: 90 }, (_, i) => `<i style="width:${[2, 1, 3, 1, 2, 1][i % 6]}px"></i>`).join('')}</span><span>Nº <input readonly name="matricula_no" class="mat"></span><span>VÁLIDO ATÉ 03/2000</span></div>
 </div>
-<p class="nota no-img">Clique na foto para escolher a imagem do aluno.</p>`;
+<p class="nota no-img">Toque na foto para escolher a imagem do aluno.</p>`;
 
 // ---------- Bolinhas ----------
 document.querySelectorAll('.dots').forEach(el => {
@@ -157,6 +158,7 @@ function recalc() {
   $('#saldo').className = 'resta ' + (q > d ? 'over' : '');
   if (q > d) erros.push('As Qualidades gastam mais do que os Defeitos compensam.');
   $('#avisos').innerHTML = erros.filter(e => !e.startsWith('sobram:')).map(e => `<div>⚠ ${e}</div>`).join('');
+  guardar();
   return erros;
 }
 document.addEventListener('change', recalc);
@@ -182,7 +184,12 @@ const sync = () => { $('[name=cart_nome]').value = $('[name=nome]').value; };
 $('[name=nome]').addEventListener('input', sync);
 const mat = 'Y99-' + (Math.floor(Math.random() * 9000) + 1000);
 $('[name=matricula_no]').defaultValue = mat; $('[name=matricula_no]').value = mat;
-const fotoLimpa = () => { $('[name=foto]').value = ''; $('#fotobox').style.backgroundImage = ''; $('#fotobox').innerHTML = 'FOTO<br>3x4'; };
+const mostraFoto = f => {
+  const ok = f && f.startsWith('data:image/');
+  $('#fotobox').style.backgroundImage = ok ? `url("${f}")` : '';
+  $('#fotobox').innerHTML = ok ? '' : 'FOTO<br>3x4';
+};
+const fotoLimpa = () => { $('[name=foto]').value = ''; mostraFoto(''); };
 $('#fotoin').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
   const img = new Image();
@@ -191,82 +198,124 @@ $('#fotoin').addEventListener('change', e => {
     const x = c.getContext('2d'), r = Math.max(240 / img.width, 320 / img.height);
     x.drawImage(img, (240 - img.width * r) / 2, (320 - img.height * r) / 2, img.width * r, img.height * r);
     const d = c.toDataURL('image/jpeg', .8);
-    $('[name=foto]').value = d; $('#fotobox').style.backgroundImage = `url(${d})`; $('#fotobox').textContent = '';
+    $('[name=foto]').value = d; mostraFoto(d); guardar();
+    URL.revokeObjectURL(img.src);
   };
   img.src = URL.createObjectURL(f);
 });
 
-// ---------- Abas ----------
+// ---------- Abas e modo celular ----------
 const mostra = id => {
   document.querySelectorAll('.pag').forEach(p => { p.hidden = p.id !== id; });
   document.querySelectorAll('.abas a').forEach(a => a.classList.toggle('ativa', a.dataset.aba === id));
 };
 document.querySelectorAll('.abas a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); mostra(a.dataset.aba); }));
 mostra('p1');
+const mq = matchMedia('(max-width:640px)');
+mq.addEventListener('change', () => document.body.classList.toggle('m', mq.matches));
 
-// ---------- Imprimir = gerar imagem ----------
-/*$('#btnimg').addEventListener('click', async () => {
-  if (typeof html2canvas === 'undefined') return alert('Não consegui carregar o html2canvas (sem internet?).');
-  const nome = slug($('[name=nome]').value) || 'aluno';
-  const atual = document.querySelector('.pag:not([hidden])').id;
-  for (const [id, arq] of [['p1', 'ficha'], ['p2', 'carteirinha']]) {
-    mostra(id);
-    const c = await html2canvas($('#' + id), { scale: 2, backgroundColor: '#eceadf', ignoreElements: e => e.classList && e.classList.contains('no-img') });
-    const a = document.createElement('a');
-    a.download = `${arq}-${nome}.png`; a.href = c.toDataURL('image/png'); a.click();
-  }
-  mostra(atual);
-});*/
-// ---------- Baixar imagens ----------
-async function baixar(pagina, alvo, arq) {
+// ---------- Salvar no navegador, exportar e importar ----------
+const dados = () => Object.fromEntries(new FormData($('#ficha')));
+let tSalvar;
+function guardar() {
+  clearTimeout(tSalvar);
+  tSalvar = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(dados())); } catch {} }, 400);
+}
+function restaurar(d) {
+  document.querySelectorAll('#ficha [name]').forEach(el => {
+    if (el.name === 'matricula_no' && !d.matricula_no) return;
+    if (el.type === 'checkbox') el.checked = el.name in d;
+    else if (el.name in d) el.value = d[el.name];
+  });
+  document.querySelectorAll('.dots').forEach(el => { const n = el.dataset.name; el._set(n in d ? +d[n] || +el.dataset.min : +el.dataset.min); });
+  mostraFoto(d.foto);
+  sync();
+}
+function baixarArquivo(blob, nome) {
+  const u = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 4000);
+}
+$('#btncarregar').addEventListener('click', () => $('#jsonin').click());
+$('#jsonin').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d || typeof d !== 'object' || Array.isArray(d)) throw 0;
+      restaurar(d); recalc(); alert('Ficha carregada!');
+    } catch { alert('Esse arquivo não parece ser uma ficha válida.'); }
+  };
+  r.readAsText(f); e.target.value = '';
+});
+
+// ---------- Baixar imagens (sempre no layout de desktop) ----------
+async function baixar(pagina, alvo, arq, largura) {
   if (typeof html2canvas === 'undefined') return alert('Não consegui carregar o html2canvas (sem internet?).');
   const nome = slug($('[name=nome]').value) || 'aluno';
   const atual = document.querySelector('.pag:not([hidden])').id;
   mostra(pagina);
-  // Captura uma cópia fixada em (0,0): evita erro de enquadramento por causa da página centralizada.
-  const orig = $(alvo), w = orig.offsetWidth;
+  // Captura uma cópia fixada em (0,0) com largura fixa: o resultado não depende da tela do aparelho.
+  const orig = $(alvo);
   const copia = orig.cloneNode(true);
-  copia.hidden = false; copia.style.margin = '0'; copia.style.boxSizing = 'border-box'; copia.style.width = w + 'px';
+  copia.hidden = false; copia.style.margin = '0'; copia.style.width = largura + 'px';
+  // O clone perde o valor dos <select>, e o html2canvas desenha mal <textarea>.
+  const so = orig.querySelectorAll('select'), sc = copia.querySelectorAll('select');
+  so.forEach((s, i) => { sc[i].value = s.value; });
+  const to = orig.querySelectorAll('textarea'), tc = copia.querySelectorAll('textarea');
+  tc.forEach((t, i) => {
+    const d = document.createElement('div');
+    d.className = 'ta-img'; d.textContent = to[i].value; d.style.height = to[i].offsetHeight + 'px';
+    t.replaceWith(d);
+  });
   const palco = document.createElement('div');
-  palco.style.cssText = `position:fixed;left:0;top:0;z-index:-1;width:${w}px`;
+  palco.style.cssText = `position:fixed;left:0;top:0;z-index:-1;width:${largura}px`;
   palco.appendChild(copia); document.body.appendChild(palco);
   try {
     const c = await html2canvas(copia, {
-      scale: 2, scrollX: 0, scrollY: 0,
+      scale: 2, scrollX: 0, scrollY: 0, windowWidth: Math.max(innerWidth, largura + 20),
       backgroundColor: pagina === 'p1' ? '#eceadf' : null,
-      ignoreElements: e => e.classList && e.classList.contains('no-img')
+      ignoreElements: e => e.classList && e.classList.contains('no-img'),
+      onclone: doc => doc.body.classList.remove('m')
     });
-    const a = document.createElement('a');
-    a.download = `${arq}-${nome}.png`; a.href = c.toDataURL('image/png'); a.click();
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    baixarArquivo(blob, `${arq}-${nome}.png`);
   } catch (err) { console.error(err); alert('Não foi possível gerar a imagem.'); }
   palco.remove();
   mostra(atual);
 }
-$('#btnficha').addEventListener('click', () => baixar('p1', '#p1', 'ficha'));
-$('#btncart').addEventListener('click', () => baixar('p2', '.gaku', 'carteirinha'));
+$('#btnficha').addEventListener('click', () => baixar('p1', '#p1', 'ficha', 736));
+$('#btncart').addEventListener('click', () => baixar('p2', '.gaku', 'carteirinha', 620));
 
-// ---------- Reset e envio ----------
-$('#ficha').addEventListener('reset', () => setTimeout(() => {
-  document.querySelectorAll('.dots').forEach(el => el._set(+el.dataset.min));
-  $('[name=qua_total]').value = 0; $('[name=def_total]').value = 0;
-  fotoLimpa(); sync(); recalc();
-}));
-$('#ficha').addEventListener('submit', async e => {
+// ---------- Reset e conclusão ----------
+$('#ficha').addEventListener('reset', e => {
+  if (!confirm('Limpar toda a ficha? Isso apaga o que foi preenchido neste aparelho.')) return e.preventDefault();
+  setTimeout(() => {
+    document.querySelectorAll('.dots').forEach(el => el._set(+el.dataset.min));
+    $('[name=qua_total]').value = 0; $('[name=def_total]').value = 0;
+    fotoLimpa(); sync(); recalc();
+  });
+});
+$('#ficha').addEventListener('submit', e => {
   e.preventDefault();
-  const dados = Object.fromEntries(new FormData(e.target));
-  if (!dados.nome) { mostra('p1'); return alert('Escreva o nome do aluno antes de enviar!'); }
+  const d = dados();
+  if (!d.nome) { mostra('p1'); return alert('Escreva o nome do aluno antes de concluir!'); }
   const erros = recalc();
-  if (erros.some(x => !x.startsWith('sobram:'))) { mostra('p1'); return alert('Corrija os avisos em vermelho antes de enviar.'); }
+  if (erros.some(x => !x.startsWith('sobram:'))) { mostra('p1'); return alert('Corrija os avisos em vermelho antes de concluir.'); }
   const sobras = erros.filter(x => x.startsWith('sobram:')).map(x => x.slice(7));
-  if (sobras.length && !confirm(`Ainda sobram pontos em: ${sobras.join(', ')}. Enviar assim mesmo?`)) return;
-  try {
-    const r = await fetch('/api/fichas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
-    const { id } = await r.json();
-    const ok = $('#ok'); ok.hidden = false;
-    ok.innerHTML = `Matrícula enviada! Protocolo nº <tt>${id.toUpperCase()}</tt><br>Bem-vindo(a) à Yasogami, ${dados.nome}.`;
-    ok.scrollIntoView({ behavior: 'smooth' });
-  } catch { alert('Erro ao enviar. O servidor está no ar?'); }
+  if (sobras.length && !confirm(`Ainda sobram pontos em: ${sobras.join(', ')}. Concluir assim mesmo?`)) return;
+  baixarArquivo(new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' }), `ficha-${slug(d.nome) || 'aluno'}.json`);
+  const ok = $('#ok'); ok.hidden = false;
+  ok.textContent = `Matrícula concluída, ${d.nome}! Baixe também as imagens e guarde o arquivo .json para carregar a ficha depois.`;
+  ok.scrollIntoView({ behavior: 'smooth' });
 });
 
-fetch('/api/visitas').then(r => r.json()).then(d => { $('#contador').textContent = String(d.visitas).padStart(7, '0'); }).catch(() => {});
+// ---------- Contador decorativo (só neste aparelho) ----------
+let vis = 1337;
+try { vis = (+localStorage.getItem('yasogami-visitas') || 1336) + 1; localStorage.setItem('yasogami-visitas', vis); } catch {}
+$('#contador').textContent = String(vis).padStart(7, '0');
+
+// ---------- Início: recupera o que foi salvo e recalcula ----------
+try { const salvo = JSON.parse(localStorage.getItem(KEY) || 'null'); if (salvo) restaurar(salvo); } catch {}
 recalc();

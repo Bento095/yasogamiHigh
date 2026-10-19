@@ -1,8 +1,7 @@
 {
   "name": "yasogami-matricula",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Ficha retrô de Vampiro: A Máscara (V20) disfarçada de matrícula da Yasogami High",
-  "main": "server.js",
   "scripts": { "start": "node server.js" },
   "license": "MIT"
 }
