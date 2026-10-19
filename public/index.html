@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Yasogami High School - Formulário de Matrícula</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+<center>
+<table class="page" cellpadding="0" cellspacing="0"><tr><td>
+
+<div class="topo">
+  <div class="marca">
+    <img src="logo.png" alt="" id="logo" onerror="this.remove()">
+    <div class="wordart">YASOGAMI<br><small>HIGH SCHOOL</small></div>
+  </div>
+  <div class="sub">Inaba, Tóquio &bull; Ano Letivo 1999</div>
+</div>
+
+<marquee class="aviso" scrollamount="4">*** MATRÍCULAS ABERTAS *** Não saia de casa em noites de névoa *** Preencha a ficha com letra legível *** Alunos novos: levem uma foto 3x4 ***</marquee>
+
+<p class="intro">Bem-vindo(a) à <b>página oficial de matrículas</b> da Yasogami High!<br>
+Sua ficha tem <b>duas páginas</b>: a ficha de matrícula e a carteirinha de estudante.</p>
+
+<div class="abas">
+  <a href="#" data-aba="p1">[ Página 1: Ficha ]</a>
+  <a href="#" data-aba="p2">[ Página 2: Carteirinha ]</a>
+</div>
+
+<form id="ficha">
+  <section id="p1" class="pag"></section>
+  <section id="p2" class="pag" hidden></section>
+  <div id="avisos" class="avisos"></div>
+  <div class="botoes">
+    <input type="submit" value="Enviar Matrícula">
+    <input type="button" id="btnficha" value="Baixar Ficha (PNG)">
+    <input type="button" id="btncart" value="Baixar Carteirinha (PNG)">
+    <input type="reset" value="Limpar Ficha">
+  </div>
+</form>
+
+<div id="ok" class="ok" hidden></div>
+
+<hr class="arco">
+<div class="rodape">
+  <p>Você é o visitante número <span class="contador" id="contador">0001337</span></p>
+  <p><span class="blink">NOVO!</span> Ficha salva no servidor do Narrador.</p>
+  <p><small>Melhor visualizado no Netscape Navigator 4.0 em 800x600 &bull; &copy; 1999 Yasogami High School &bull; Webmaster: Sr. Morooka</small></p>
+</div>
+
+</td></tr></table>
+</center>
+<script src="script.js"></script>
+</body>
+</html>
