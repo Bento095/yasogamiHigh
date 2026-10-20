@@ -251,40 +251,74 @@ $('#jsonin').addEventListener('change', e => {
 });
 
 // ---------- Baixar imagens (sempre no layout de desktop) ----------
+const LADOS = ['top', 'right', 'bottom', 'left'];
+const PROPS_EST = [
+  'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'color', 'background-color',
+  'box-sizing', 'width', 'height', 'min-width', 'flex-grow', 'flex-shrink', 'flex-basis', 'opacity',
+  'border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius',
+  ...LADOS.flatMap(l => [`border-${l}-width`, `border-${l}-style`, `border-${l}-color`, `padding-${l}`, `margin-${l}`])
+];
+// Troca <input>/<select> por um bloco de texto: o html2canvas desenha mal o texto dos campos (corta a base das letras).
+function estatico(el, origem) {
+  const cs = getComputedStyle(el), d = document.createElement('div'), s = document.createElement('span');
+  PROPS_EST.forEach(p => d.style.setProperty(p, cs.getPropertyValue(p)));
+  d.style.display = cs.display.startsWith('inline') ? 'inline-flex' : 'flex';
+  d.style.alignItems = 'center';
+  d.style.justifyContent = origem.tagName !== 'SELECT' && cs.textAlign === 'center' ? 'center'
+    : origem.tagName !== 'SELECT' && cs.textAlign === 'right' ? 'flex-end' : 'flex-start';
+  let txt = origem.tagName === 'SELECT' ? ((origem.options[origem.selectedIndex] || {}).text || '') : origem.value;
+  if (origem.type === 'date' && txt) txt = txt.split('-').reverse().join('/');
+  s.textContent = txt;
+  s.style.cssText = 'display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;padding:1px 0';
+  d.appendChild(s);
+  el.replaceWith(d);
+}
+
 async function baixar(pagina, alvo, arq, largura) {
   if (typeof html2canvas === 'undefined') return alert('Não consegui carregar o html2canvas (sem internet?).');
   const nome = slug($('[name=nome]').value) || 'aluno';
   const atual = document.querySelector('.pag:not([hidden])').id;
+  const rolagem = scrollY, eraMobile = document.body.classList.contains('m');
+  const veu = document.createElement('div');
+  veu.className = 'veu no-img'; veu.textContent = 'Gerando imagem...';
+  document.body.appendChild(veu);
   mostra(pagina);
-  // Captura uma cópia fixada em (0,0) com largura fixa: o resultado não depende da tela do aparelho.
-  const orig = $(alvo);
-  const copia = orig.cloneNode(true);
-  copia.hidden = false; copia.style.margin = '0'; copia.style.width = largura + 'px';
-  // O clone perde o valor dos <select>, e o html2canvas desenha mal <textarea>.
-  const so = orig.querySelectorAll('select'), sc = copia.querySelectorAll('select');
-  so.forEach((s, i) => { sc[i].value = s.value; });
-  const to = orig.querySelectorAll('textarea'), tc = copia.querySelectorAll('textarea');
-  tc.forEach((t, i) => {
-    const d = document.createElement('div');
-    d.className = 'ta-img'; d.textContent = to[i].value; d.style.height = to[i].offsetHeight + 'px';
-    t.replaceWith(d);
-  });
+  document.body.classList.remove('m'); // durante a captura, layout de desktop (o véu esconde a troca)
   const palco = document.createElement('div');
-  palco.style.cssText = `position:fixed;left:0;top:0;z-index:-1;width:${largura}px`;
-  palco.appendChild(copia); document.body.appendChild(palco);
   try {
+    const orig = $(alvo), copia = orig.cloneNode(true);
+    copia.hidden = false; copia.style.margin = '0'; copia.style.width = largura + 'px';
+    // <textarea> também vira bloco de texto
+    const to = orig.querySelectorAll('textarea');
+    copia.querySelectorAll('textarea').forEach((t, i) => {
+      const d = document.createElement('div');
+      d.className = 'ta-img'; d.textContent = to[i].value; d.style.height = to[i].offsetHeight + 'px';
+      t.replaceWith(d);
+    });
+    // Captura uma cópia fixada em (0,0) com largura fixa: o resultado não depende da tela do aparelho.
+    palco.style.cssText = `position:fixed;left:0;top:0;z-index:-1;width:${largura}px`;
+    palco.appendChild(copia); document.body.appendChild(palco);
+    // Campos de texto, número, data e select viram texto (o valor vem dos campos originais).
+    const campos = orig.querySelectorAll('input, select');
+    copia.querySelectorAll('input, select').forEach((el, i) => {
+      if (el.tagName === 'SELECT' || ['text', 'number', 'date'].includes(el.type)) estatico(el, campos[i]);
+    });
     const c = await html2canvas(copia, {
       scale: 2, scrollX: 0, scrollY: 0, windowWidth: Math.max(innerWidth, largura + 20),
       backgroundColor: pagina === 'p1' ? '#eceadf' : null,
-      ignoreElements: e => e.classList && e.classList.contains('no-img'),
-      onclone: doc => doc.body.classList.remove('m')
+      ignoreElements: e => e.classList && e.classList.contains('no-img')
     });
     const blob = await new Promise(res => c.toBlob(res, 'image/png'));
     baixarArquivo(blob, `${arq}-${nome}.png`);
-  } catch (err) { console.error(err); alert('Não foi possível gerar a imagem.'); }
-  palco.remove();
-  mostra(atual);
+  } catch (err) {
+    console.error(err); alert('Não foi possível gerar a imagem.');
+  } finally {
+    palco.remove(); veu.remove();
+    if (eraMobile) document.body.classList.add('m');
+    mostra(atual); scrollTo(0, rolagem);
+  }
 }
+
 $('#btnficha').addEventListener('click', () => baixar('p1', '#p1', 'ficha', 736));
 $('#btncart').addEventListener('click', () => baixar('p2', '.gaku', 'carteirinha', 620));
 

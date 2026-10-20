@@ -139,3 +139,6 @@ input[type=submit]:active,input[type=button]:active,input[type=reset]:active{bor
 .m .bar{flex-basis:100%}
 
 @media print{body{background:#fff}.aviso,.abas,.botoes,.ok,.rodape,.arco,.avisos{display:none}.page{border:none}}
+
+/* véu mostrado enquanto a imagem é gerada */
+.veu{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:#10105a;color:#ffd800;display:flex;align-items:center;justify-content:center;font:bold 18px "Courier New",monospace}
