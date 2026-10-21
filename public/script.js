@@ -189,15 +189,21 @@ const mostraFoto = f => {
   $('#fotobox').style.backgroundImage = ok ? `url("${f}")` : '';
   $('#fotobox').innerHTML = ok ? '' : 'FOTO<br>3x4';
 };
-const fotoLimpa = () => { $('[name=foto]').value = ''; mostraFoto(''); };
 $('#fotoin').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
   const img = new Image();
   img.onload = () => {
-    const c = document.createElement('canvas'); c.width = 240; c.height = 320;
-    const x = c.getContext('2d'), r = Math.max(240 / img.width, 320 / img.height);
-    x.drawImage(img, (240 - img.width * r) / 2, (320 - img.height * r) / 2, img.width * r, img.height * r);
-    const d = c.toDataURL('image/jpeg', .8);
+    // Mesmo enquadramento de antes (recorte 3:4 centralizado), mas guardando até 600x800 e nunca ampliando.
+    let sw = img.width, sh = sw * 4 / 3;
+    if (sh > img.height) { sh = img.height; sw = sh * 3 / 4; }
+    const sx = (img.width - sw) / 2, sy = (img.height - sh) / 2;
+    const k = Math.min(1, 600 / sw), w = Math.round(sw * k), h = Math.round(sh * k);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    const d = c.toDataURL('image/jpeg', .92);
     $('[name=foto]').value = d; mostraFoto(d); guardar();
     URL.revokeObjectURL(img.src);
   };
@@ -304,7 +310,7 @@ async function baixar(pagina, alvo, arq, largura) {
       if (el.tagName === 'SELECT' || ['text', 'number', 'date'].includes(el.type)) estatico(el, campos[i]);
     });
     const c = await html2canvas(copia, {
-      scale: 2, scrollX: 0, scrollY: 0, windowWidth: Math.max(innerWidth, largura + 20),
+      scale: pagina === 'p2' ? 3 : 2, scrollX: 0, scrollY: 0, windowWidth: Math.max(innerWidth, largura + 20),
       backgroundColor: pagina === 'p1' ? '#eceadf' : null,
       ignoreElements: e => e.classList && e.classList.contains('no-img')
     });
